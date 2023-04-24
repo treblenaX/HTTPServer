@@ -4,8 +4,6 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.logging.*;
-import java.awt.image.BufferedImage;
-import javax.imageio.ImageIO;
 import java.nio.file.Files;
 
 
@@ -105,11 +103,9 @@ public class HTTPThread extends Thread {
             }
             LOGGER.info(this.name + " DONE CLIENT REQUEST PARSE...");
     
-            Map<String, String> responseHeaders = new HashMap<>();
-    
             switch (this.method) {
                 case GET:
-                    get(responseHeaders);
+                    get();
                     break;
                 // case POST:
                 //     response = handlePOST();
@@ -136,8 +132,9 @@ public class HTTPThread extends Thread {
         }
     }
 
-    private void get(Map<String, String> responseHeaders) {
+    private void get() {
         LOGGER.info(this.name + " processing GET request...");
+        Map<String, String> responseHeaders = new HashMap<>();
         String contentType = this.headers.get("Content-Type");
         File file;
         byte[] fileBytes;
@@ -205,9 +202,6 @@ public class HTTPThread extends Thread {
                 response.append(CRLF);
             }
 
-            // handle payload if exists
-            // if (payload != null) response.append(payload);
-
             // send response
             OutputStream os = this.socket.getOutputStream();
             os.write(response.toString().getBytes());
@@ -217,36 +211,4 @@ public class HTTPThread extends Thread {
             e.printStackTrace();
         }
     }
-
-    // public void respond(
-    //     StatusCode code,
-    //     String fileBytes,
-    //     Map<String, String> responseHeaders
-    // ) {
-    //     try {
-    //         StringBuilder response = new StringBuilder();
-    //         // handle start-line
-    //         response.append("HTTP/1.1 " + code.toString());
-    //         response.append(CRLF);
-
-    //         // handle response headers
-    //         if (responseHeaders != null) {
-    //             for (Map.Entry<String, String> entry : responseHeaders.entrySet()) {
-    //                 response.append(entry.getKey() + ": " + entry.getValue());
-    //                 response.append(CRLF);
-    //             }
-        
-    //             response.append(CRLF);
-    //         }
-
-    //         // send response
-    //         OutputStream os = this.socket.getOutputStream();
-    //         PrintWriter out = new PrintWriter(os, true);
-    //         response.append(fileBytes);
-    //         out.print(response.toString());
-    //         out.flush();
-    //     } catch (Exception e) {
-    //         e.printStackTrace();
-    //     }
-    // }
 }
