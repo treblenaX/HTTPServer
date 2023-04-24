@@ -4,16 +4,45 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.logging.*;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.nio.file.Files;
+
 
 public class HTTPThread extends Thread {
     enum HTTPMethod {
         GET, POST, PUT, DELETE, HEAD, OPTIONS
     }
 
+    enum StatusCode {
+        OK,
+        CREATED,
+        NOT_FOUND,
+        UNSUPPORTED_MEDIA_TYPE,
+        INTERNAL_SERVER_ERROR;
+
+        public String toString() {
+            switch (this) {
+                case OK:
+                    return "200 OK";
+                case CREATED:
+                    return "201 Created";
+                case UNSUPPORTED_MEDIA_TYPE:
+                    return "415 Unsupported Media Type";
+                case NOT_FOUND:
+                    return "404 Not Found";
+                case INTERNAL_SERVER_ERROR:
+                    return "500 Internal Server Error";
+                default:
+                    return "500 Internal Server Error";
+            }
+        }
+    }
+
     private static final Logger LOGGER = Logger.getLogger(HTTPThread.class.getName());
     private String name;
     private Socket socket;
-    private final String CRLF = System.getProperty("line.separator").toString();
+    private final String CRLF = "\r\n";
 
     HTTPMethod method;
     String uri;
@@ -35,33 +64,21 @@ public class HTTPThread extends Thread {
 
     public void run() {
         try {
-            parseClientRequest(this.socket);
-            String payload = handleClientRequest();
-            sendResponse(this.socket, payload);
-            LOGGER.info(this.name + " CLOSING SOCKET!");
-            this.socket.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void parseClientRequest(Socket socket) {
-        try {
             LOGGER.info(this.name + " PARSING CLIENT REQUEST...");
-            InputStream input = socket.getInputStream();
+            InputStream input = this.socket.getInputStream();
             String inputLine;
             BufferedReader reader = new BufferedReader(new InputStreamReader(input));
-
+    
             // startline data
             boolean handleStartLine = true;
-
+    
             // handle startline
             while (handleStartLine && (inputLine = reader.readLine()) != null) {
                 if (inputLine.equals(CRLF)) {   // keep going until you find data
                     continue;
                 } else {
                     String[] startLineTokens = inputLine.split(" ");
-
+    
                     if (startLineTokens.length != 3) {
                         LOGGER.severe(this.name + " INVALID REQUEST");
                         return;
@@ -69,17 +86,17 @@ public class HTTPThread extends Thread {
                     this.method = HTTPMethod.valueOf(startLineTokens[0]);
                     this.uri = startLineTokens[1];
                     this.version = startLineTokens[2];
-
+    
                     handleStartLine = false;
                 }
             }
-
+    
             // handle headers
             boolean handleHeaders = true;
             
             while (handleHeaders && (inputLine = reader.readLine()) != null) {
                 String[] headerTokens = inputLine.split(":");
-
+    
                 if (inputLine.equals(CRLF) || headerTokens.length != 2) {
                     handleHeaders = false;
                 } else {
@@ -87,19 +104,12 @@ public class HTTPThread extends Thread {
                 }
             }
             LOGGER.info(this.name + " DONE CLIENT REQUEST PARSE...");
-        } catch (IOException e) {
-            LOGGER.severe(this.name + " " + e.toString());
-        }
-    }
-
-    private String handleClientRequest() {
-        LOGGER.info(this.name + " HANDLING CLIENT REQUEST...");
-        String response = "";
-
-        try {
+    
+            Map<String, String> responseHeaders = new HashMap<>();
+    
             switch (this.method) {
                 case GET:
-                    response = handleGET();
+                    get(responseHeaders);
                     break;
                 // case POST:
                 //     response = handlePOST();
@@ -117,68 +127,126 @@ public class HTTPThread extends Thread {
                 //     response = handleOPTIONS();
                 //     break;
                 default:
-                    response = "HTTP/1.1 405 Method Not Allowed" + CRLF + CRLF;
-                    break;
+                    throw new Error("Invalid HTTP Method: " + this.method);
             }
+            LOGGER.info(this.name + " CLOSING SOCKET!");
+            this.socket.close();
         } catch (Exception e) {
-            response = "HTTP/1.1 500 Internal Server Error" + CRLF + CRLF;
+            e.printStackTrace();
         }
-
-        return response;
     }
 
-    private String handleGET() {
+    private void get(Map<String, String> responseHeaders) {
         LOGGER.info(this.name + " processing GET request...");
-        String response = "";
         String contentType = this.headers.get("Content-Type");
+        File file;
+        byte[] fileBytes;
 
         try {
             switch (contentType) {
-                case "text/plain":     // text/plain
-                    File file = new File("." + this.uri);
-                    System.out.println(file.getAbsolutePath());
-                    Scanner scanner = new Scanner(file);
+                case "text/plain":
+                    file = new File("." + this.uri);
+                    fileBytes = Files.readAllBytes(file.toPath());
 
+                    responseHeaders.put("Content-Type", contentType);
+                    responseHeaders.put("Content-Length", Integer.toString(fileBytes.length));
 
-                    response += scanner.nextLine();
+                    respond(StatusCode.OK, fileBytes, responseHeaders);
+                    break;
+                case "image/jpeg":
+                    file = new File("./images" + this.uri);
+                    fileBytes = Files.readAllBytes(file.toPath());
 
-                    while (scanner.hasNextLine()) {
-                        response += '\n';
-                        response += scanner.nextLine();
-                    }
+                    responseHeaders.put("Content-Type", contentType);
+                    responseHeaders.put("Content-Length", Integer.toString(fileBytes.length));
+
+                    respond(StatusCode.OK, fileBytes, responseHeaders);
                     break;
                 default:
-                    response = "HTTP/1.1 415 Unsupported Media Type" + CRLF + CRLF;
+                    String response = "Unsupported Media Type: " + contentType;
+    
+                    responseHeaders.put("Content-Type", contentType);
+                    responseHeaders.put("Content-Length", Integer.toString(response.length()));
+    
+                    respond(StatusCode.UNSUPPORTED_MEDIA_TYPE, response.getBytes(), responseHeaders);
                     break;
             }
-        } catch (Exception e) {
-            System.out.println(e);
-            response = "HTTP/1.1 500 Internal Server Error" + CRLF + CRLF;
-        }
+        } catch (FileNotFoundException e) {
+            String response = "File not found: " + this.uri;
 
-        return response;
+            responseHeaders.put("Content-Type", "text/plain");
+            responseHeaders.put("Content-Length", Integer.toString(response.length()));
+
+            respond(StatusCode.NOT_FOUND, response.getBytes(), responseHeaders);
+        } catch (IOException e) {
+            String response = "Internal Server Error: " + e.getMessage();
+
+            responseHeaders.put("Content-Type", "text/plain");
+            responseHeaders.put("Content-Length", Integer.toString(response.length()));
+
+            respond(StatusCode.INTERNAL_SERVER_ERROR, response.getBytes(), responseHeaders);
+        }
     }
 
-    private void sendResponse(Socket socket, String payload) {
+    public void respond(StatusCode code, byte[] payload, Map<String, String> responseHeaders) {
         try {
             StringBuilder response = new StringBuilder();
-
             // handle start-line
-            response.append("HTTP/1.1 200 OK" + CRLF);
+            response.append("HTTP/1.1 " + code.toString());
+            response.append(CRLF);
 
             // handle response headers
-            response.append("Content-Type: " + this.headers.get("Content-Type"));
-            response.append("Content-Length: " + payload.length() + CRLF + CRLF);
+            if (responseHeaders != null) {
+                for (Map.Entry<String, String> entry : responseHeaders.entrySet()) {
+                    response.append(entry.getKey() + ": " + entry.getValue());
+                    response.append(CRLF);
+                }
+        
+                response.append(CRLF);
+            }
 
-            // handle response payload
-            response.append(payload);
+            // handle payload if exists
+            // if (payload != null) response.append(payload);
 
-            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-            out.print(response.toString());
-            out.close();
+            // send response
+            OutputStream os = this.socket.getOutputStream();
+            os.write(response.toString().getBytes());
+            os.write(payload);
+            os.flush();
         } catch (Exception e) {
             e.printStackTrace();
-            LOGGER.severe(this.name + " " + e.toString());
         }
     }
+
+    // public void respond(
+    //     StatusCode code,
+    //     String fileBytes,
+    //     Map<String, String> responseHeaders
+    // ) {
+    //     try {
+    //         StringBuilder response = new StringBuilder();
+    //         // handle start-line
+    //         response.append("HTTP/1.1 " + code.toString());
+    //         response.append(CRLF);
+
+    //         // handle response headers
+    //         if (responseHeaders != null) {
+    //             for (Map.Entry<String, String> entry : responseHeaders.entrySet()) {
+    //                 response.append(entry.getKey() + ": " + entry.getValue());
+    //                 response.append(CRLF);
+    //             }
+        
+    //             response.append(CRLF);
+    //         }
+
+    //         // send response
+    //         OutputStream os = this.socket.getOutputStream();
+    //         PrintWriter out = new PrintWriter(os, true);
+    //         response.append(fileBytes);
+    //         out.print(response.toString());
+    //         out.flush();
+    //     } catch (Exception e) {
+    //         e.printStackTrace();
+    //     }
+    // }
 }
