@@ -45,6 +45,7 @@ public class HTTPThread extends Thread {
     HTTPMethod method;
     String uri;
     String version;
+    StringBuilder body;
     Map<String, String> headers;
 
     public HTTPThread(Level level, Socket socket) {
@@ -56,60 +57,73 @@ public class HTTPThread extends Thread {
         this.uri = "";
         this.version = "";
         this.headers = new HashMap<>();
+        this.body = new StringBuilder();
 
         LOGGER.info(this.name + " CONNECTED...");
     }
 
     public void run() {
         try {
-            LOGGER.info(this.name + " PARSING CLIENT REQUEST...");
-            InputStream input = this.socket.getInputStream();
-            String inputLine;
-            BufferedReader reader = new BufferedReader(new InputStreamReader(input));
+            LOGGER.info(this.name + " PARSE - STARTLINE");
+            InputStream is = this.socket.getInputStream();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is));
     
-            // startline data
-            boolean handleStartLine = true;
-    
+            String line;
+
             // handle startline
-            while (handleStartLine && (inputLine = reader.readLine()) != null) {
-                if (inputLine.equals(CRLF)) {   // keep going until you find data
+            while ((line = reader.readLine()) != null) {
+                if (line.equals(CRLF)) {   // keep going until you find data
                     continue;
                 } else {
-                    String[] startLineTokens = inputLine.split(" ");
+                    String[] startLineTokens = line.split(" ");
     
                     if (startLineTokens.length != 3) {
                         LOGGER.severe(this.name + " INVALID REQUEST");
                         return;
                     }
+
                     this.method = HTTPMethod.valueOf(startLineTokens[0]);
                     this.uri = startLineTokens[1];
                     this.version = startLineTokens[2];
     
-                    handleStartLine = false;
+                    break;
                 }
             }
-    
-            // handle headers
-            boolean handleHeaders = true;
             
-            while (handleHeaders && (inputLine = reader.readLine()) != null) {
-                String[] headerTokens = inputLine.split(":");
-    
-                if (inputLine.equals(CRLF) || headerTokens.length != 2) {
-                    handleHeaders = false;
+            LOGGER.info(this.name + " PARSE - HEADERS");
+            // // handle headers
+            while ((line = reader.readLine()) != null) {
+                int separatorIndex = line.indexOf(":");
+
+                if (line.length() == 0) {
+                    break;
                 } else {
-                    this.headers.put(headerTokens[0].trim(), headerTokens[1].trim());
+                    this.headers.put(
+                        line.substring(0, separatorIndex).trim(),
+                        line.substring(separatorIndex + 1).trim()
+                    );
                 }
             }
-            LOGGER.info(this.name + " DONE CLIENT REQUEST PARSE...");
+
+            LOGGER.info(this.name + " PARSE - BODY");
+            int contentLength = Integer.parseInt(this.headers.get("Content-Length"));
+            int readChar;
+            // handle body
+            while (contentLength != 0 && (readChar = reader.read()) != -1) {
+                char c = (char) readChar;
+                this.body.append(c);
+                contentLength--;
+            }
+
+            LOGGER.info(this.name + " PARSE - DONE");
     
             switch (this.method) {
                 case GET:
                     get();
                     break;
-                // case POST:
-                //     response = handlePOST();
-                //     break;
+                case POST:
+                    post();
+                    break;
                 // case PUT:
                 //     response = handlePUT();
                 //     break;
@@ -125,15 +139,16 @@ public class HTTPThread extends Thread {
                 default:
                     throw new Error("Invalid HTTP Method: " + this.method);
             }
-            LOGGER.info(this.name + " CLOSING SOCKET!");
             this.socket.close();
+
+            LOGGER.info(this.name + " GOODBYE!");
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     private void get() {
-        LOGGER.info(this.name + " processing GET request...");
+        LOGGER.info(this.name + " GET");
         Map<String, String> responseHeaders = new HashMap<>();
         String contentType = this.headers.get("Content-Type");
         File file;
@@ -142,7 +157,7 @@ public class HTTPThread extends Thread {
         try {
             switch (contentType) {
                 case "text/plain":
-                    file = new File("." + this.uri);
+                    file = new File("./texts" + this.uri);
                     fileBytes = Files.readAllBytes(file.toPath());
 
                     responseHeaders.put("Content-Type", contentType);
@@ -177,6 +192,60 @@ public class HTTPThread extends Thread {
             respond(StatusCode.NOT_FOUND, response.getBytes(), responseHeaders);
         } catch (IOException e) {
             String response = "Internal Server Error: " + e.getMessage();
+
+            responseHeaders.put("Content-Type", "text/plain");
+            responseHeaders.put("Content-Length", Integer.toString(response.length()));
+
+            respond(StatusCode.INTERNAL_SERVER_ERROR, response.getBytes(), responseHeaders);
+        }
+    }
+
+    private void post() {
+        LOGGER.info(this.name + " POST");
+
+        Map<String, String> responseHeaders = new HashMap<>();
+
+        if (!this.headers.get("Content-Type").equals("text/plain")) {   // no support for other types
+            String response = "Unsupported Media Type: " + this.headers.get("Content-Type");
+
+            responseHeaders.put("Content-Type", "text/plain");
+            responseHeaders.put("Content-Length", Integer.toString(response.length()));
+
+            respond(StatusCode.UNSUPPORTED_MEDIA_TYPE, response.getBytes(), responseHeaders);
+            return;
+        }
+
+        File file;
+        byte[] fileBytes;
+
+        try {
+            file = new File("./texts" + this.uri);
+            fileBytes = Files.readAllBytes(file.toPath());
+
+            byte[] newBytes = (this.body.toString() + '\n').getBytes();
+            byte[] combined = new byte[fileBytes.length + newBytes.length];
+
+            System.arraycopy(fileBytes, 0, combined, 0, fileBytes.length);
+            System.arraycopy(newBytes, 0, combined, fileBytes.length, newBytes.length);
+
+            FileWriter fw = new FileWriter(file);
+            fw.write(new String(combined));
+
+            fw.close();
+
+            responseHeaders.put("Content-Type", "text/plain");
+            responseHeaders.put("Content-Length", Integer.toString(combined.length));
+
+            respond(StatusCode.OK, combined, responseHeaders);
+        } catch (FileNotFoundException e) {
+            String response = "File not found: " + this.uri;
+
+            responseHeaders.put("Content-Type", "text/plain");
+            responseHeaders.put("Content-Length", Integer.toString(response.length()));
+
+            respond(StatusCode.NOT_FOUND, response.getBytes(), responseHeaders);
+        } catch (IOException e) {
+            String response = e.getMessage();
 
             responseHeaders.put("Content-Type", "text/plain");
             responseHeaders.put("Content-Length", Integer.toString(response.length()));
