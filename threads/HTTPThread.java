@@ -129,12 +129,11 @@ public class HTTPThread extends Thread {
                 case "DELETE":
                     delete();
                     break;
-                case HEAD:
+                case "HEAD":
                     head();
                     break;
-                // case OPTIONS:
-                //     response = handleOPTIONS();
-                //     break;
+                case "OPTIONS":
+                    options();
                 // default:
                 //     throw new Error("Invalid HTTP Method: " + this.method);
             }
@@ -312,6 +311,10 @@ public class HTTPThread extends Thread {
 
         LOGGER.info(this.name + " - " + code.toString());
         respond(code, null, responseHeaders);
+    }
+
+    private void options() {
+        
     }
 
     private void respond(StatusCode code, byte[] payload, Map<String, String> responseHeaders) {
