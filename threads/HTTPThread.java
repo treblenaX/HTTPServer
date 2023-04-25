@@ -11,6 +11,7 @@ public class HTTPThread extends Thread {
     enum StatusCode {
         OK,
         CREATED,
+        NO_CONTENT,
         NOT_FOUND,
         UNSUPPORTED_MEDIA_TYPE,
         INTERNAL_SERVER_ERROR;
@@ -21,6 +22,8 @@ public class HTTPThread extends Thread {
                     return "200 OK";
                 case CREATED:
                     return "201 Created";
+                case NO_CONTENT:
+                    return "204 No Content";
                 case UNSUPPORTED_MEDIA_TYPE:
                     return "415 Unsupported Media Type";
                 case NOT_FOUND:
@@ -61,6 +64,7 @@ public class HTTPThread extends Thread {
     public void run() {
         try {
             LOGGER.info(this.name + " PARSE - STARTLINE");
+
             InputStream is = this.socket.getInputStream();
             BufferedReader reader = new BufferedReader(new InputStreamReader(is));
     
@@ -82,7 +86,8 @@ public class HTTPThread extends Thread {
             }
             
             LOGGER.info(this.name + " PARSE - HEADERS");
-            // // handle headers
+
+            // handle headers
             while ((line = reader.readLine()) != null) {
                 int separatorIndex = line.indexOf(":");
 
@@ -121,12 +126,12 @@ public class HTTPThread extends Thread {
                 case "PUT":
                     put();
                     break;
-                // case DELETE:
-                //     response = handleDELETE();
-                //     break;
-                // case HEAD:
-                //     response = handleHEAD();
-                //     break;
+                case "DELETE":
+                    delete();
+                    break;
+                case HEAD:
+                    head();
+                    break;
                 // case OPTIONS:
                 //     response = handleOPTIONS();
                 //     break;
@@ -234,7 +239,7 @@ public class HTTPThread extends Thread {
             }
             outputBytes = this.body.toString().getBytes();
             contentType = Files.probeContentType(file.toPath());
-            code = StatusCode.OK;
+            code = StatusCode.CREATED;
 
             FileOutputStream fos = new FileOutputStream(file);
             fos.write(outputBytes);
@@ -255,6 +260,60 @@ public class HTTPThread extends Thread {
         respond(code, outputBytes, responseHeaders);
     }
 
+    private void delete() {
+        LOGGER.info(this.name + " DELETE");
+
+        Map<String, String> responseHeaders = new HashMap<>();
+        boolean acknowledgement = true;
+        StatusCode code = null;
+        File file = new File("./public" + this.uri);
+
+        if (file.exists()) { 
+            acknowledgement = file.delete(); 
+            code = StatusCode.OK;
+        } else {
+            acknowledgement = false;
+            code = StatusCode.NOT_FOUND;
+        }
+        
+        byte[] outputBytes = String.valueOf(acknowledgement).getBytes();
+    
+        responseHeaders.put("Content-Type", "text/plain");
+        responseHeaders.put("Content-Length", Integer.toString(outputBytes.length));
+
+        LOGGER.info(this.name + " - " + code.toString());
+        respond(code, outputBytes, responseHeaders);
+    }
+
+    private void head() {
+        LOGGER.info(this.name + " HEAD");
+
+        Map<String, String> responseHeaders = new HashMap<>();
+
+        byte[] fileBytes = null;
+        StatusCode code = null;
+        String contentType = "";
+
+        try {
+            File file = new File("./public" + this.uri);
+            fileBytes = Files.readAllBytes(file.toPath());
+            contentType = Files.probeContentType(file.toPath());
+            code = StatusCode.OK;
+        } catch (FileNotFoundException e) {
+            fileBytes = ("Not Found: " + this.uri).getBytes();
+            code = StatusCode.NOT_FOUND;
+        } catch (IOException e) {
+            fileBytes = ("Internal Server Error").getBytes();
+            code = StatusCode.INTERNAL_SERVER_ERROR;
+        }
+    
+        responseHeaders.put("Content-Type", contentType);
+        responseHeaders.put("Content-Length", Integer.toString(fileBytes.length));
+
+        LOGGER.info(this.name + " - " + code.toString());
+        respond(code, null, responseHeaders);
+    }
+
     private void respond(StatusCode code, byte[] payload, Map<String, String> responseHeaders) {
         try {
             StringBuilder response = new StringBuilder();
@@ -271,11 +330,12 @@ public class HTTPThread extends Thread {
         
                 response.append(CRLF);
             }
+            System.out.println(response.toString());
 
             // send response
             OutputStream os = this.socket.getOutputStream();
             os.write(response.toString().getBytes());
-            os.write(payload);
+            if (payload != null) os.write(payload);
             os.flush();
         } catch (Exception e) {
             e.printStackTrace();
