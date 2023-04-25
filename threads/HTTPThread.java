@@ -8,10 +8,6 @@ import java.nio.file.Files;
 
 
 public class HTTPThread extends Thread {
-    enum HTTPMethod {
-        GET, POST, PUT, DELETE, HEAD, OPTIONS
-    }
-
     enum StatusCode {
         OK,
         CREATED,
@@ -42,7 +38,7 @@ public class HTTPThread extends Thread {
     private Socket socket;
     private final String CRLF = "\r\n";
 
-    HTTPMethod method;
+    String method;
     String uri;
     String version;
     StringBuilder body;
@@ -53,7 +49,7 @@ public class HTTPThread extends Thread {
         this.socket = socket;
         LOGGER.setLevel(level);
 
-        this.method = null;
+        this.method = "";
         this.uri = "";
         this.version = "";
         this.headers = new HashMap<>();
@@ -76,13 +72,8 @@ public class HTTPThread extends Thread {
                     continue;
                 } else {
                     String[] startLineTokens = line.split(" ");
-    
-                    if (startLineTokens.length != 3) {
-                        LOGGER.severe(this.name + " INVALID REQUEST");
-                        return;
-                    }
 
-                    this.method = HTTPMethod.valueOf(startLineTokens[0]);
+                    this.method = startLineTokens[0];
                     this.uri = startLineTokens[1];
                     this.version = startLineTokens[2];
     
@@ -105,28 +96,31 @@ public class HTTPThread extends Thread {
                 }
             }
 
-            LOGGER.info(this.name + " PARSE - BODY");
-            int contentLength = Integer.parseInt(this.headers.get("Content-Length"));
-            int readChar;
-            // handle body
-            while (contentLength != 0 && (readChar = reader.read()) != -1) {
-                char c = (char) readChar;
-                this.body.append(c);
-                contentLength--;
+            if (this.headers.containsKey("Content-Length")) {
+                LOGGER.info(this.name + " PARSE - BODY");
+
+                int contentLength = Integer.parseInt(this.headers.get("Content-Length"));
+                int readChar;
+                // handle body
+                while (contentLength != 0 && (readChar = reader.read()) != -1) {
+                    char c = (char) readChar;
+                    this.body.append(c);
+                    contentLength--;
+                }
             }
 
             LOGGER.info(this.name + " PARSE - DONE");
     
             switch (this.method) {
-                case GET:
+                case "GET":
                     get();
                     break;
-                case POST:
+                case "POST":
                     post();
                     break;
-                // case PUT:
-                //     response = handlePUT();
-                //     break;
+                case "PUT":
+                    put();
+                    break;
                 // case DELETE:
                 //     response = handleDELETE();
                 //     break;
@@ -136,8 +130,8 @@ public class HTTPThread extends Thread {
                 // case OPTIONS:
                 //     response = handleOPTIONS();
                 //     break;
-                default:
-                    throw new Error("Invalid HTTP Method: " + this.method);
+                // default:
+                //     throw new Error("Invalid HTTP Method: " + this.method);
             }
             this.socket.close();
 
@@ -149,55 +143,31 @@ public class HTTPThread extends Thread {
 
     private void get() {
         LOGGER.info(this.name + " GET");
+
         Map<String, String> responseHeaders = new HashMap<>();
-        String contentType = this.headers.get("Content-Type");
-        File file;
-        byte[] fileBytes;
+
+        byte[] fileBytes = null;
+        StatusCode code = null;
+        String contentType = "";
 
         try {
-            switch (contentType) {
-                case "text/plain":
-                    file = new File("./texts" + this.uri);
-                    fileBytes = Files.readAllBytes(file.toPath());
-
-                    responseHeaders.put("Content-Type", contentType);
-                    responseHeaders.put("Content-Length", Integer.toString(fileBytes.length));
-
-                    respond(StatusCode.OK, fileBytes, responseHeaders);
-                    break;
-                case "image/jpeg":
-                    file = new File("./images" + this.uri);
-                    fileBytes = Files.readAllBytes(file.toPath());
-
-                    responseHeaders.put("Content-Type", contentType);
-                    responseHeaders.put("Content-Length", Integer.toString(fileBytes.length));
-
-                    respond(StatusCode.OK, fileBytes, responseHeaders);
-                    break;
-                default:
-                    String response = "Unsupported Media Type: " + contentType;
-    
-                    responseHeaders.put("Content-Type", contentType);
-                    responseHeaders.put("Content-Length", Integer.toString(response.length()));
-    
-                    respond(StatusCode.UNSUPPORTED_MEDIA_TYPE, response.getBytes(), responseHeaders);
-                    break;
-            }
+            File file = new File("./public" + this.uri);
+            fileBytes = Files.readAllBytes(file.toPath());
+            contentType = Files.probeContentType(file.toPath());
+            code = StatusCode.OK;
         } catch (FileNotFoundException e) {
-            String response = "File not found: " + this.uri;
-
-            responseHeaders.put("Content-Type", "text/plain");
-            responseHeaders.put("Content-Length", Integer.toString(response.length()));
-
-            respond(StatusCode.NOT_FOUND, response.getBytes(), responseHeaders);
+            fileBytes = ("Not Found: " + this.uri).getBytes();
+            code = StatusCode.NOT_FOUND;
         } catch (IOException e) {
-            String response = "Internal Server Error: " + e.getMessage();
-
-            responseHeaders.put("Content-Type", "text/plain");
-            responseHeaders.put("Content-Length", Integer.toString(response.length()));
-
-            respond(StatusCode.INTERNAL_SERVER_ERROR, response.getBytes(), responseHeaders);
+            fileBytes = ("Internal Server Error").getBytes();
+            code = StatusCode.INTERNAL_SERVER_ERROR;
         }
+    
+        responseHeaders.put("Content-Type", contentType);
+        responseHeaders.put("Content-Length", Integer.toString(fileBytes.length));
+
+        LOGGER.info(this.name + " - " + code.toString());
+        respond(code, fileBytes, responseHeaders);
     }
 
     private void post() {
@@ -205,56 +175,87 @@ public class HTTPThread extends Thread {
 
         Map<String, String> responseHeaders = new HashMap<>();
 
-        if (!this.headers.get("Content-Type").equals("text/plain")) {   // no support for other types
-            String response = "Unsupported Media Type: " + this.headers.get("Content-Type");
-
-            responseHeaders.put("Content-Type", "text/plain");
-            responseHeaders.put("Content-Length", Integer.toString(response.length()));
-
-            respond(StatusCode.UNSUPPORTED_MEDIA_TYPE, response.getBytes(), responseHeaders);
-            return;
-        }
-
-        File file;
-        byte[] fileBytes;
+        byte[] fileBytes = null;
+        byte[] outputBytes = null;
+        StatusCode code = null;
+        String contentType = "";
 
         try {
-            file = new File("./texts" + this.uri);
+            File file = new File("./public" + this.uri);
             fileBytes = Files.readAllBytes(file.toPath());
+            contentType = Files.probeContentType(file.toPath());
+            code = StatusCode.OK;
 
-            byte[] newBytes = (this.body.toString() + '\n').getBytes();
-            byte[] combined = new byte[fileBytes.length + newBytes.length];
+            // check if the contentType is supported
+            if (!contentType.equals("text/plain")) { throw new Exception("Unsupported Media Type"); }
 
-            System.arraycopy(fileBytes, 0, combined, 0, fileBytes.length);
-            System.arraycopy(newBytes, 0, combined, fileBytes.length, newBytes.length);
+            byte[] bodyBytes = ('\n' + this.body.toString()).getBytes();
+            outputBytes = new byte[fileBytes.length + bodyBytes.length];
 
-            FileWriter fw = new FileWriter(file);
-            fw.write(new String(combined));
+            System.arraycopy(fileBytes, 0, outputBytes, 0, fileBytes.length);
+            System.arraycopy(bodyBytes, 0, outputBytes, fileBytes.length, bodyBytes.length);
 
-            fw.close();
+            FileOutputStream fos = new FileOutputStream(file);
+            fos.write(outputBytes);
+            fos.close();
 
-            responseHeaders.put("Content-Type", "text/plain");
-            responseHeaders.put("Content-Length", Integer.toString(combined.length));
-
-            respond(StatusCode.OK, combined, responseHeaders);
         } catch (FileNotFoundException e) {
-            String response = "File not found: " + this.uri;
-
-            responseHeaders.put("Content-Type", "text/plain");
-            responseHeaders.put("Content-Length", Integer.toString(response.length()));
-
-            respond(StatusCode.NOT_FOUND, response.getBytes(), responseHeaders);
+            outputBytes = ("Not Found: " + this.uri).getBytes();
+            code = StatusCode.NOT_FOUND;
         } catch (IOException e) {
-            String response = e.getMessage();
-
-            responseHeaders.put("Content-Type", "text/plain");
-            responseHeaders.put("Content-Length", Integer.toString(response.length()));
-
-            respond(StatusCode.INTERNAL_SERVER_ERROR, response.getBytes(), responseHeaders);
+            outputBytes = ("Internal Server Error").getBytes();
+            code = StatusCode.INTERNAL_SERVER_ERROR;
+        } catch (Exception e) {
+            outputBytes = ("Unsupported Media Type").getBytes();
+            code = StatusCode.UNSUPPORTED_MEDIA_TYPE;
         }
+    
+        responseHeaders.put("Content-Type", contentType);
+        responseHeaders.put("Content-Length", Integer.toString(outputBytes.length));
+
+        LOGGER.info(this.name + " - " + code.toString());
+        respond(code, outputBytes, responseHeaders);
     }
 
-    public void respond(StatusCode code, byte[] payload, Map<String, String> responseHeaders) {
+    private void put() {
+        LOGGER.info(this.name + " PUT");
+
+        Map<String, String> responseHeaders = new HashMap<>();
+
+        byte[] outputBytes = null;
+        StatusCode code = null;
+        String contentType = "";
+
+        try {
+            File file = new File("./public" + this.uri);
+
+            if (!file.exists()) {   // CREATE - file does not exist
+                file.createNewFile();
+            }
+            outputBytes = this.body.toString().getBytes();
+            contentType = Files.probeContentType(file.toPath());
+            code = StatusCode.OK;
+
+            FileOutputStream fos = new FileOutputStream(file);
+            fos.write(outputBytes);
+            fos.close();
+
+        } catch (IOException e) {
+            outputBytes = ("Internal Server Error").getBytes();
+            code = StatusCode.INTERNAL_SERVER_ERROR;
+        } catch (Exception e) {
+            outputBytes = ("Unsupported Media Type").getBytes();
+            code = StatusCode.UNSUPPORTED_MEDIA_TYPE;
+        }
+    
+        responseHeaders.put("Content-Type", contentType);
+        responseHeaders.put("Content-Length", Integer.toString(outputBytes.length));
+
+        LOGGER.info(this.name + " - " + code.toString());
+        respond(code, outputBytes, responseHeaders);
+    }
+
+    private void respond(StatusCode code, byte[] payload, Map<String, String> responseHeaders) {
         try {
             StringBuilder response = new StringBuilder();
             // handle start-line
