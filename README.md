@@ -129,7 +129,8 @@ After the PUT request on new file - `public/hot_dog.txt`
     responseHeaders.put("Content-Length", Integer.toString(outputBytes.length));
 
     LOGGER.info(this.name + " - " + code.toString());
-    respond(code, outputBytes, responseHeaders);</details>
+    respond(code, outputBytes, responseHeaders);
+</details>
 <details>
                 <summary>DELETE</summary>
                     <!-- Space -->
