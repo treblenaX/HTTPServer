@@ -15,7 +15,7 @@ Here are some examples of what can be fetched with GET.
 
 Notice how the text file contents is fetched and displayed on the browser.
 
-![Plain Text Image](text_plain.png)
+![Plain Text Image](markdown/text_plain.png)
 
 ---
 
@@ -37,7 +37,7 @@ Calling the [index HTML page](public/index.html) using `http://localhost/index.h
 
 >The `./satoru_gojo.jpg` and `jujutsu-kaisen-funny.gif` are relative paths that is in the `/public` folder and on the same level as the `index.html`.
 
-![Index HTML image](index_html.png)
+![Index HTML image](markdown/index_html.png)
 
 ---
 
@@ -45,4 +45,4 @@ Calling the [index HTML page](public/index.html) using `http://localhost/index.h
 
 Notice how there is no file with the name `example.tx` within the `/public` folder. Therefore, the server returns an error code of `404 NOT FOUND` along with the corresponding HTTPCat.
 
-![error 404 page](get_404.png)
+![error 404 page](markdown/get_404.png)
