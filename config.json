@@ -1,7 +1,7 @@
 {
     "title": "HTTP Server",
     "files": {
-        "get.md": "GET",
-        "run.md": "How to Run..."
+        "markdown/get.md": "GET",
+        "markdown/run.md": "How to Run..."
     }
 }
