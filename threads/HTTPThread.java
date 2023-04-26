@@ -254,14 +254,16 @@ public class HTTPThread extends Thread {
 
         try {
             File file = new File("./public" + this.uri);
+            
+            code = StatusCode.OK;
 
             if (!file.exists()) {   // CREATE - file does not exist
                 file.createNewFile();
+                code = StatusCode.CREATED;
             }
 
             outputBytes = this.body.toString().getBytes();
             contentType = Files.probeContentType(file.toPath());
-            code = StatusCode.CREATED;
 
             FileOutputStream fos = new FileOutputStream(file);
             fos.write(outputBytes);
