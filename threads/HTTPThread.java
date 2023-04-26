@@ -370,7 +370,7 @@ public class HTTPThread extends Thread {
                     responseHeaders.put("Allow", "GET, PUT, DELETE, HEAD, OPTIONS");
                     break;
             }
-            
+
             contentType = Files.probeContentType(file.toPath());
             code = StatusCode.OK;
         } catch (FileNotFoundException e) {
@@ -405,7 +405,6 @@ public class HTTPThread extends Thread {
         
                 response.append(CRLF);
             }
-            System.out.println(response.toString());
 
             // send response
             OutputStream os = this.socket.getOutputStream();
