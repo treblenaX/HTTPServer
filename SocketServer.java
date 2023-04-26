@@ -34,7 +34,7 @@ public class SocketServer {
                 executor.execute(new HTTPThread(LOGGER.getLevel(), client));
             } while (isRunning);
 
-            // serverSocket.close();
+            serverSocket.close();
         } catch (IOException e) {
 
         }

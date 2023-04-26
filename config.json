@@ -3,6 +3,8 @@
     "files": {
         "markdown/run.md": "How to Run...",
         "markdown/get.md": "GET",
-        "markdown/post.md": "POST"
+        "markdown/post.md": "POST",
+        "markdown/put.md": "PUT",
+        "markdown/delete.md": "DELETE"
     }
 }

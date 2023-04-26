@@ -223,15 +223,15 @@ public class HTTPThread extends Thread {
             fos.write(outputBytes);
             fos.close();
         } catch (FileNotFoundException e) {
-            fileBytes = (StatusCode.NOT_FOUND.toHtml()).getBytes();
+            outputBytes = (StatusCode.NOT_FOUND.toHtml()).getBytes();
             contentType = "text/html";
             code = StatusCode.NOT_FOUND;
         } catch (IOException e) {
-            fileBytes = (StatusCode.INTERNAL_SERVER_ERROR.toHtml()).getBytes();
+            outputBytes = (StatusCode.INTERNAL_SERVER_ERROR.toHtml()).getBytes();
             contentType = "text/html";
             code = StatusCode.INTERNAL_SERVER_ERROR;
         } catch (Exception e) {
-            fileBytes = (StatusCode.UNSUPPORTED_MEDIA_TYPE.toHtml()).getBytes();
+            outputBytes = (StatusCode.UNSUPPORTED_MEDIA_TYPE.toHtml()).getBytes();
             contentType = "text/html";
             code = StatusCode.UNSUPPORTED_MEDIA_TYPE;
         }
