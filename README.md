@@ -86,9 +86,34 @@ After the POST request - `public/example.txt`
                 <summary>PUT</summary>
                     <!-- Space -->
 
-</details>
+## URL: `http://localhost/example.txt`
+
+Before the PUT request (after the POST request from before)- `public/example.txt`
+
+    cereal is definitely not a soup cereal is a soup >:(
+
+After the PUT request on existing file - `public/example.txt`
+
+![PUT_AFTER](markdown/put_after_OK.png)
+
+After the PUT request on new file - `public/hot_dog.txt`
+
+![Hot Dog](markdown/put_after_CREATED.png)
+
+
+## Handles `404` for `FILE NOT FOUND` and `500` error for `INTERNAL SERVER ERROR`.</details>
 <details>
                 <summary>DELETE</summary>
                     <!-- Space -->
 
-</details>
+## URL: `http://localhost/hot_dog.txt`
+
+Before the DELETE request - we made the `hot_dog.txt` file under `/public` from the `PUT` request section. **Now we are going to delete it**
+
+![DELETE AFTER](markdown/delete_after.png)
+
+## Handles `404` for `FILE NOT FOUND`.
+
+Let's try delete `hot_dog.txt` again after deleting it with the process above.
+
+![DELETE 404](markdown/delete_404.png)</details>
