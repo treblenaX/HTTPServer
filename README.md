@@ -9,6 +9,8 @@
                 <summary>GET</summary>
                     <!-- Space -->
 
+---
+
 # Supported MIME Types
 
 Technically, this server has no restrictions on what MIME types are restricted. 
@@ -60,9 +62,13 @@ Notice how there is no file with the name `example.tx` within the `/public` fold
                 <summary>POST</summary>
                     <!-- Space -->
 
+---
+
 # Supported MIME Types
 
 As the spec mentions, this only supports `text/plain`.
+
+---
 
 ## URL: `http://localhost/example.txt`
 
@@ -74,10 +80,13 @@ After the POST request - `public/example.txt`
 
 ![after POST request](markdown/post_after.png)
 
+---
+
 ## (ERROR - 415) URL: `http://localhost/index.html`
 
 ![415](markdown/post_415.png)
 
+---
 
 ## (ERROR - 404) URL: `http://localhost/index.h`
 
@@ -85,6 +94,8 @@ After the POST request - `public/example.txt`
 <details>
                 <summary>PUT</summary>
                     <!-- Space -->
+
+---
 
 ## URL: `http://localhost/example.txt`
 
@@ -100,11 +111,30 @@ After the PUT request on new file - `public/hot_dog.txt`
 
 ![Hot Dog](markdown/put_after_CREATED.png)
 
+---
 
-## Handles `404` for `FILE NOT FOUND` and `500` error for `INTERNAL SERVER ERROR`.</details>
+## Handles `404` for `FILE NOT FOUND` and `500` error for `INTERNAL SERVER ERROR`.
+
+    catch (IOException e) {
+        outputBytes = (StatusCode.INTERNAL_SERVER_ERROR.toHtml()).getBytes();
+        contentType = "text/html";
+        code = StatusCode.INTERNAL_SERVER_ERROR;
+    } catch (Exception e) {
+        outputBytes = (StatusCode.UNSUPPORTED_MEDIA_TYPE.toHtml()).getBytes();
+        contentType = "text/html";
+        code = StatusCode.UNSUPPORTED_MEDIA_TYPE;
+    }
+    
+    responseHeaders.put("Content-Type", contentType);
+    responseHeaders.put("Content-Length", Integer.toString(outputBytes.length));
+
+    LOGGER.info(this.name + " - " + code.toString());
+    respond(code, outputBytes, responseHeaders);</details>
 <details>
                 <summary>DELETE</summary>
                     <!-- Space -->
+
+---
 
 ## URL: `http://localhost/hot_dog.txt`
 
@@ -112,8 +142,81 @@ Before the DELETE request - we made the `hot_dog.txt` file under `/public` from 
 
 ![DELETE AFTER](markdown/delete_after.png)
 
+---
+
 ## Handles `404` for `FILE NOT FOUND`.
 
 Let's try delete `hot_dog.txt` again after deleting it with the process above.
 
 ![DELETE 404](markdown/delete_404.png)</details>
+<details>
+                <summary>OPTIONS</summary>
+                    <!-- Space -->
+
+---
+
+## Grabbing OPTIONS for text: `http://localhost/example.txt`
+
+![text](markdown/options_text.png)
+
+---
+
+## Grabbing OPTIONS for image: `http://localhost/happy_cat.jpg`
+
+![image](markdown/options_image.png)
+</details>
+<details>
+                <summary>HEAD</summary>
+                    <!-- Space -->
+
+---
+
+## URL: `http://localhost/index.html`
+
+After the HEAD request:
+
+![HEAD_INDEX](markdown/head_index.png)
+
+No body is returned.
+
+![HEAD_BODY](markdown/head_body.png)
+</details>
+<details>
+                <summary>Errors as HTTP Cat</summary>
+                    <!--- Space -->
+
+Whenever any of these requests hit an Exception or an Error, then an Error response is sent out to the client.
+
+# How the Error HTML is Constructed
+
+    "<html>" + 
+        "<head><title>" + this.toString() + "</title></head>" +
+        "<body>" +
+            "<img src=\"https://http.cat/" + code + "\" alt=\"" + code + "\">" +
+        "</body>" +
+    "</html>";
+
+Then the server converts that to bytes and then sends it to the client.
+
+---
+
+## (404 - ERROR)
+
+Notice how there is no file with the name `example.tx` within the `/public` folder. Therefore, the server returns an error code of `404 NOT FOUND` along with the corresponding HTTPCat.
+
+![error 404 page](markdown/get_404.png)
+
+## (500 - ERROR) HTML
+
+---
+
+![error 404 page](markdown/cat_500_html.png)
+
+## (500 - ERROR) Preview
+
+---
+
+![error 404 page](markdown/cat_500.png)
+
+
+</details>
