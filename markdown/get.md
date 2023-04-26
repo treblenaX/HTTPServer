@@ -1,5 +1,7 @@
 <!-- Space -->
 
+---
+
 # Supported MIME Types
 
 Technically, this server has no restrictions on what MIME types are restricted. 

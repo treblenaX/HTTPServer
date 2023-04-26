@@ -146,8 +146,6 @@ public class HTTPThread extends Thread {
                     break;
                 case "OPTIONS":
                     options();
-                // default:
-                //     throw new Error("Invalid HTTP Method: " + this.method);
             }
             this.socket.close();
 

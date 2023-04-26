@@ -5,6 +5,9 @@
         "markdown/get.md": "GET",
         "markdown/post.md": "POST",
         "markdown/put.md": "PUT",
-        "markdown/delete.md": "DELETE"
+        "markdown/delete.md": "DELETE",
+        "markdown/options.md": "OPTIONS",
+        "markdown/head.md": "HEAD",
+        "markdown/http_cat.md": "Errors as HTTP Cat"
     }
 }
